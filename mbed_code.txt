@@ -1,0 +1,125 @@
+/*  Name - Aar Mhan Phyo
+    PSB Id - 0268bk9c */
+#include "mbed.h"
+#include "PinNames.h"
+#include <chrono>
+
+
+#define BUFF_LENGTH 64
+#define Sleep_Rate 200ms //delay of 0.2 secs
+DigitalIn button(PC_13);
+int length; //variable to store message
+char buffer[BUFF_LENGTH] = {0}; //LED status buffer
+
+//Assigning character to variable
+char onsignal  = 'Y'; //character to turn On led
+char offsignal = 'N'; //character to turn off led
+
+//Declare to assignment
+BufferedSerial pc(USBTX, USBRX, 115200); //USB communication with UWP application
+DigitalOut led(LED1); //Initialise the digital pin LED1 as an output
+
+
+// Function to rest buffer memory
+void resetBuffer()
+{
+    memset(buffer, 0, sizeof(buffer));
+}
+
+//Funtion to display the message when JSON string on the LED 
+void data_msg_on()
+{
+    length = snprintf(buffer, BUFF_LENGTH, "\r\n{\"Data\":{\"A\":LED Statuts: On}}"); // jason msg (led on)
+    pc.write(buffer,length); // send the msg
+    ThisThread::sleep_for(chrono::seconds(1)); // send every 1 second
+}
+
+//Function to display the message when JSON string off the LED
+void data_msg_off()
+{
+    length = snprintf(buffer, BUFF_LENGTH, "\r\n{\"Data\":{\"A\":LED Status: OFF}}"); // jason msg (led off)
+    pc.write(buffer, length); // send the msg
+    ThisThread::sleep_for(chrono::seconds(1)); // send every 1 second
+}
+
+// Function to clear last jason message
+void c_msg(){
+    length = snprintf(buffer, BUFF_LENGTH, "\r\n{\"Data\":{\"A\":}}"); // jason msg to clear the last msg
+    pc.write(buffer, length); // send the msg
+
+}
+
+// Function to make the led
+void blink_led() {
+    
+    for (int i = 0; i < 10; ++i) // Blink 10 times
+    {
+        length = snprintf(buffer, BUFF_LENGTH, "\r\n{\"Data\":{\"A\":LED is Blinking........}}");// jason msg to indicated that led is blinking
+        pc.write(buffer, length); // send the msg
+        ThisThread::sleep_for(chrono::seconds(1)); // send every 1 second
+        c_msg(); // clear the msg 
+        led = !led; // Toggle LED state
+        ThisThread::sleep_for(chrono::milliseconds(500)); // Blink every 0.5 seconds
+        // To send the completed msg after blinking the last time
+        if (i == 9){
+            length = snprintf(buffer, BUFF_LENGTH, "\r\n{\"Data\":{\"A\":Blinking Completed........}}"); // completed blinking jason msg
+            pc.write(buffer, length); // send the msg
+            
+        }
+        
+    }
+    c_msg(); // clear the msg
+
+    led = 0; // Ensure LED is off after blinking
+    
+    
+    
+}
+// Function that  send msg to uwp when the button on mcu is clicked
+void button_msg(){
+    length = snprintf(buffer, BUFF_LENGTH, "\r\n{\"Data\":{\"A\":Button Clicked!!!}}"); // send this jason msg as soon as the button is clicked!
+    pc.write(buffer, length); // send the msg
+    ThisThread::sleep_for(chrono::seconds(1)); // send every 1 second (optional)
+}
+
+
+
+// main() runs in its own thread in the OS
+int main()
+{   // main while loop to make the program keep running
+    while (true) 
+    {
+        if (button != 1){ // If the button is clicked
+            button_msg(); // Call the button msg function
+            
+            blink_led(); // Call the blink LED function
+            
+            
+           
+
+        }
+        if (pc.readable()) //Check if any data coming in through the USB
+        {
+            length = pc.read(buffer, sizeof(buffer)); //Read data sent from UWP into buffer
+            //Chcek the message string recieved
+            for(int i = 0; i< length; i++) //Check each character of the JSON string one by one
+            {
+                if (buffer[i] == onsignal) //If there is a char "Y" in the JSON  string
+                {
+                    led = true; // Turn on nucleo board LED
+                    data_msg_on();
+                    c_msg();
+                }
+                else if (buffer[i] == offsignal){
+                 //if there is a char "N" in the JSON string
+        
+                    led = false; //Turn LED to off
+                    data_msg_off();
+                    c_msg();
+                }
+            }
+        }
+        resetBuffer(); //Reset buffer memory after processing
+        ThisThread::sleep_for(Sleep_Rate); //wait for 200ms/ 0.2 secs
+    }
+}
